@@ -1,0 +1,8 @@
+Changes
+Makefile.PL
+MANIFEST
+README
+t/Games-Hack-Live.t
+lib/Games/Hack/Live.pm
+GPL-3
+META.yml                                 Module meta-data (added by MakeMaker)

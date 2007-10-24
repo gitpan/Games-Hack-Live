@@ -1,0 +1,15 @@
+Revision history for Perl extension Games::Hack::Live.
+
+0.4  Wed Oct 24 06:52:11 CEST 2007
+  - Renamed to correct name
+	- Support for various types in search
+	- integer and floating point searching/patching possible
+	- "find" prints last list
+	- (useless) test added
+	- Optionally asks for description for killed writes
+	- Can attach to a running process
+
+0.3  Tue Sep 18 15:57:37 2007
+	- first published version;
+	- supports finding/killing integer values.
+
