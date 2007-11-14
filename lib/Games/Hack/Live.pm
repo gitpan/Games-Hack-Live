@@ -7,8 +7,12 @@ package Games::Hack::Live;
 use Expect;
 use Getopt::Std;
 
+require Exporter;
+@ISA = qw(Exporter);
+@EXPORT = qw(Run);
 
-$VERSION=0.4;
+
+$VERSION=0.404;
 
 
 # Client program name
@@ -31,15 +35,19 @@ our($prg,
     $dumppath,
 # Dump start number
     $dump,
+# Patches to the program image
+    @patches,
 # GDB Prompt variables
     $gdb_prompt_base,
     $gdb_prompt_count,
     %cmd_opts);
 
 
-Inits();
-StartDebuggee();
-GDBStart();
+sub Run
+{
+  Inits();
+  StartDebuggee();
+  GDBStart();
 
 
 #	For debugging ...
@@ -47,50 +55,51 @@ GDBStart();
 #$gdb->debug(2);
 
 
-$quit=0;
-while (!$quit)
-{
-  print "---> ";
-  (undef, $error) = expect( undef, 
-      '-i', [ $input ], 
-      [ qr/^\s*dumpall(?:\s+(.+))?/i, \&DumpAll, ],
-      [ qr/^\s*#/, sub { return 0; print "comment ignored\n"; 0; },  ],
-      [ qr/^\s*cleanup/i, \&CleanUp, ],
-      [ qr/^\s*find\s+(.+)/i, \&Find, ],
-      [ qr/^\s*find/i, \&ShowMatches, ],
-      [ qr/^\s*
-          keepvalueat \s+             # command name
-          (\S+)                       # address,
-          (?:\s+|\s*=\s*)             # = or whitespace
-          (?: \( ([\w ]+) \) \s* )?   # opt. type
-          (\S+)                       # value
-          (?:\s+["'](.+?)["'])?
-          /ix, \&KeepValueAt, ],
-      [ qr/^\s*
-          killwrites \s+
-          (\S+)                       # address
-          (?: \s+ 
-            (["'])(.+)\3              # opt. name
-          )?
-          (?: \s+
-            (ask)                     # opt. flag to ask for description
-          )?/ix, \&KillWrites, ],
-      [ qr/^\s*(.+?)\s*$/, \&PassThru, ],
-      [ 'eof', sub { $quit=1; 0; },  ],
-      '-i', [ $gdb ],
-      GDBmatches(1),
-      );
-}
+  $quit=0;
+  while (!$quit)
+  {
+    print "---> ";
+    (undef, $error) = expect( undef, 
+        '-i', [ $input ], 
+        [ qr/^\s*dumpall(?:\s+(.+))?/i, \&DumpAll, ],
+        [ qr/^\s*#/, sub { return 0; print "comment ignored\n"; 0; },  ],
+        [ qr/^\s*cleanup/i, \&CleanUp, ],
+        [ qr/^\s*help/i, \&Help, ],
+        [ qr/^\s*find\s+(.+)/i, \&Find, ],
+        [ qr/^\s*find/i, \&ShowMatches, ],
+        [ qr/^\s*patch\s+(\S+)/i, \&PatchBin, ],
+        [ qr/^\s*
+            keepvalueat \s+             # command name
+            (\S+)                       # address,
+            (?:\s+|\s*=\s*)             # = or whitespace
+            (?: \( ([\w ]+) \) \s* )?   # opt. type
+            (\S+)                       # value
+            (?:\s+["'](.+?)["'])?
+            /ix, \&KeepValueAt, ],
+        [ qr/^\s*
+            killwrites \s+
+            (\S+)                       # address
+            (?: \s+ 
+             (["'])(.+)\3              # opt. name
+            )?
+            (?: \s+
+             (ask)                     # opt. flag to ask for description
+            )?/ix, \&KillWrites, ],
+        [ qr/^\s*(.+?)\s*$/, \&PassThru, ],
+        [ 'eof', sub { $quit=1; 0; },  ],
+        '-i', [ $gdb ],
+        GDBmatches(1),
+        );
+  }
 
-print "\n\nQuitting ...\n";
-$gdb->send("kill\n");
-$gdb->send("q\n");
-$gdb->hard_close();
+  print "\n\nQuitting ...\n";
+  $gdb->send("kill\n");
+  $gdb->send("q\n");
+  $gdb->hard_close();
 
 # Print results.
-print @summary;
-
-exit;
+  print @summary;
+}
 
 ###################################   The end. 
 ###################################****************************
@@ -333,6 +342,39 @@ sub PassThru
 }
 
 
+# show help
+sub Help
+{
+  local(*F);
+  my($t);
+
+# Sucks on debian, when the dummy perldoc is installed.
+# Should we do open(F, "perldoc ... |") and count the lines?
+  if (system("perldoc Games::Hack::Live"))
+  {
+#    map { print $_, " ", $INC{$_},"\n" } keys %INC;
+    $t=$INC{"Games/Hack/Live.pm"};
+    if ($t && open(F, "< $t"))
+    {
+      $t=0;
+      while (<F>)
+      {
+        last if m#^=head1 DESCRIPTION#;
+
+        $t += $t || m#^=head1 SYNOPSIS#;
+        print if $t>1;
+      }
+      close(F);
+      print "\nHTH.\n";
+    }
+    else
+    {
+      print "Sorry, cannot show any help. I can't even find myself.\n";
+    }
+  }
+}
+
+
 # Clean up search history
 sub CleanUp
 {
@@ -344,6 +386,72 @@ sub CleanUp
   DebuggeeBreak($gdb);
   GDBSend($gdb, "delete", GDBmatches(0)); 
   DebuggeeCont() if ($should_be_running);
+}
+
+
+sub PatchBin
+{
+  my($self)=@_;
+  my($name);
+  my($base, $end, $ret);
+  local(*F);
+
+  $name=($self->matchlist())[0]; 
+
+  print "Patching $prg into $name\n";
+
+# find virtual start and end address
+  $base=0;
+
+  DebuggeeBreak($gdb);
+  GDBSend($gdb, "info proc stat", GDBmatches(0));
+$data=$gdb->before();
+  DebuggeeCont() if ($should_be_running);
+
+  ($base) = ($data =~ /Start of text: (0x\w+)/m);
+  ($end) = ($data =~ /End of text: (0x\w+)/m);
+  print("Cannot get start address\n"), return unless $base;
+  print("Cannot get end address\n"), return unless $end;
+
+  print "  start is $base, end is $end\n";
+
+  $base=oct($base) if $base =~ m#^0#;
+  $end=oct($end) if $end =~ m#^0#;
+
+  unlink($name) || die "cannot remove $name: $!"
+    if (-e $name);
+
+# A fast copy, plus the small modifications, is likely faster than trying 
+# to copy here ...
+  print "  copying.\n";
+  $ret=system('cp',$prg,$name);
+  print("copying failed with $?\n"),return if ($ret);
+
+# apply patches ...
+  print "  patching:\n";
+  print("cannot open $name for patching: $!\n"),return 
+    if (!open(F, "+< $name"));
+
+  for $patch (@patches)
+  {
+    ($adr, $val)=@$patch;
+    if ($adr >= $base && $adr < $end)
+    {
+      printf "    0x%x (file offset %d): %s\n",
+      $adr, $adr-$base, unpack("H*", $val);
+      seek(F, $adr-$base, 0) || die "cannot seek on $name: $!\n";
+      print F $val;
+    }
+    else
+    {
+# TODO: patch shared objects, too
+      printf "Warning: cannot patch address 0x%X - not in image.\n",
+             $adr;
+    }
+  }
+
+  chmod 0755, *F;
+  close(F);
 }
 
 
@@ -405,7 +513,7 @@ sub KillWrites
   # "3 .. " as index doesn't work, splice doesn't take a subroutine call..
   @opt=$self->matchlist();
   splice(@opt, 0, 3);
-  for (@opt)
+  for (grep(/\w/,@opt))
   {
     if ($_ eq "ask") { $always_ask=1; }
     else {
@@ -650,7 +758,7 @@ sub KillWriteCallBack
     last if ($p1);
   }
 
-  die unless $p1;
+  die "cannot match opcode addresses for " . $exp->before unless $p1;
 
   $binary=GetNOP($p1, $adr, $cmd);
   die "Patch is longer than instruction!\n"
@@ -658,6 +766,8 @@ sub KillWriteCallBack
 
 # Look how many bytes we need to write.
   $killer = GetGDBWriteCommands($p1, $binary);
+
+  push @patches, [ $p1, $binary ];
 
   GDBSend($exp, $killer, GDBmatches(0));
 
@@ -684,7 +794,10 @@ sub KillWriteCallBack
            $data_adr, $cmd, $killer);
 
   DebuggeeCont() if ($should_be_running);
-  exp_continue; 
+
+  0;
+# display prompt again.
+#  exp_continue; 
 }
 
 
@@ -944,6 +1057,9 @@ sub String2Bin
 }
 
 
+##### Success!
+1;
+
 ###################################****************************
 ### ### ### ### ### ### ### ### ###
 ### ### ### ### ### ### ### ### ###   Really the end.
@@ -961,19 +1077,20 @@ Games::Hack::Live - Perl script to ease playing games
 
 To start the script:
 
-  perl -MGames::Hack::Live -e0 -- {<name of executable>|-p pid}
+  hack-live {<name of executable>|-p pid}
 
 Commands for the script:
 
+  help
   dumpall [name]
   find <value>
   find
   cleanup
   keepvalueat <address> <value> ["textual name"]
   killwrites <address> ["textual name"] [ask]
+  patch <destination name>
 
 All other strings are passed through to GDB.
-
 
 =head1 DESCRIPTION
 
@@ -1001,6 +1118,14 @@ CTRL-C; the resulting signal gets caught by the script, and it will try to
 stop the debuggee, so that its state can be examined.
 
 Use any abbreviation of C<cont> (like eg. C<c>) to continue its execution.
+
+=head2 C<help>
+
+This just shows the documentation of the C<Games::Hack::Live> module, which 
+you're just reading now.
+
+If C<perldoc> is not available, it tries to show the synopsis by using 
+C<%INC>; if that doesn't work, too, the user is out of luck.
 
 =head2 C<dumpall>
 
@@ -1183,8 +1308,10 @@ I<good> and I<bad> events later.
 =item *
 
 L</killwrites> has to be done only for a single run; the patch commands 
-might then simply be loaded without runtime-overhead. Even a modified 
-binary might be written.
+might then simply be loaded without runtime-overhead. 
+
+If a modified binary was written (see L</patch>), this can simply be 
+started; not even gdb has to be invoked.
 
 =item *
 
@@ -1195,6 +1322,15 @@ steps to get enough money you simply B<have> the money needed.
 
 Possibly both could be done - patching writes out of the binary, and change 
 the initial value that gets loaded. Volunteers?
+
+=head2 C<patch>
+
+  patch <destination name>
+
+With this command the program gets copied to the new name; the 
+currently known locations are patched, as found by L<killwrites>.
+
+  patch patched-prg
 
 =head2 Final output
 

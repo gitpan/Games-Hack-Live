@@ -6,6 +6,7 @@ WriteMakefile(
     NAME              => 'Games::Hack::Live',
     VERSION_FROM      => 'lib/Games/Hack/Live.pm', # finds $VERSION
     PREREQ_PM         => { Expect => 1.21, },
+    EXE_FILES         => [ "hack-live" ],
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Games/Hack/Live.pm', # retrieve abstract from module
        AUTHOR         => 'Ph. Marek <pmarek@cpan.org>') : ()),

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Games-Hack-Live
-version:             0.4
+version:             0.404
 abstract:            Perl script to ease playing games
 license:             ~
 generated_by:        ExtUtils::MakeMaker version 6.36

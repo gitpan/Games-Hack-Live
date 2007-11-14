@@ -16,7 +16,7 @@ exit;
 $client = new Expect;
 
 $client->raw_pty(1);
-$client->spawn("perl -MGames::Hack::Live -e0 -- -p$$ 2>&1", ()) 
+$client->spawn("hack-live -p$$ 2>&1", ()) 
 or die "Cannot spawn Games::Hack::Live: $!\n";
 
 
@@ -32,18 +32,21 @@ for $run (1 .. 10)
 	$client->print("find " . ($var-1.0) . " " . ($var+1.0) . "\n");
 	$client->expect(1, [ qr(--->), sub { } ], );
 	$last=$client->before;
-	print STDERR "$var... $last\n";
+#	print STDERR "$var... $last\n";
 }
 diag("Loop finished");
 
 
 $last=$client->before;
 print STDERR "$last\n";
+($adr, $count)=($last =~ /Most wanted:\s+(\w+)\((\d+)\)/);
+is($adr, "No matches found?");
 like($last, qr/Most wanted:\s+(\w+)\((\d+)\)/, "No matches found?");
 is($2, $run, "Not everything matched?");
 
 diag("Address is $1");
-exit;
+
+
 
 { 
 	use integer;
@@ -54,7 +57,7 @@ exit;
 		$client->print("find $var\n");
 		$client->expect(1, [ qr(--->), sub { } ], );
 $last=$client->before;
-print STDERR "$last\n";
+#print STDERR "$last\n";
 	}
 	diag("Loop finished");
 }
@@ -64,4 +67,5 @@ print STDERR "$last\n";
 #pass("aa");
 #fail("aa");
 
+exit;
 

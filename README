@@ -34,7 +34,7 @@ As an example I'll be taking "craft"; debian version 3.5-12, a "Warcraft 2-like
 multi-player real-time strategy game".
 
 Start it with
-	$ perl -MGame::Hack::Live -e0 craft
+	$ hack-live craft
 
 The script outputs a prompt "--->", and starts "craft".
 

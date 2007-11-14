@@ -1,5 +1,8 @@
 Revision history for Perl extension Games::Hack::Live.
 
+0.401 
+  - Wrapper for easier running
+
 0.4  Wed Oct 24 06:52:11 CEST 2007
   - Renamed to correct name
 	- Support for various types in search
