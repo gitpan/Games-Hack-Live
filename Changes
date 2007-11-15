@@ -1,6 +1,9 @@
 Revision history for Perl extension Games::Hack::Live.
 
-0.405 Thu Nov 15 10:25:20 CET 2007
+0.406 Thu Nov 15 10:25:20 CET 2007
+  - substitution for non-word characters in ::Patch names.
+
+0.405 Thu Nov 15 10:05:20 CET 2007
   - forgot to package hack-live script
 
 0.404 Thu Nov 14 10:25:20 CET 2007

@@ -12,7 +12,7 @@ require Exporter;
 @EXPORT = qw(Run);
 
 
-$VERSION=0.405;
+$VERSION=0.406;
 
 
 # Client program name
@@ -168,6 +168,7 @@ sub Inits
 
   chomp($machine=`uname -m`);
   print "Loading patch library for $machine...\n";
+  $machine =~ s#\W#_#;
 
   eval "use Games::Hack::Patch::$machine;";
   die $@ if $@;
@@ -181,9 +182,6 @@ sub StartDebuggee
   if ($prg_pid)
   {
   # program already started? find executable.
-  # TODO: works only on linux.
-    $prg=readlink("/proc/$prg_pid/exe") || 
-      die "Executable of pid $prg_pid not determined: $!\n";
   }
   else
   {
@@ -198,6 +196,12 @@ sub StartDebuggee
       die "exec($prg): $!\n";
     }
   }
+
+# The program may have been found via $PATH.
+# For some things (like patching) we need the full path.
+# TODO: works only on linux.
+  $prg=readlink("/proc/$prg_pid/exe") || 
+	  die "Executable of pid $prg_pid not determined: $!\n";
 
   print "Using $prg with pid $prg_pid\n";
 }
