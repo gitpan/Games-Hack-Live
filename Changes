@@ -1,6 +1,9 @@
 Revision history for Perl extension Games::Hack::Live.
 
-0.401 
+0.405 Thu Nov 15 10:25:20 CET 2007
+  - forgot to package hack-live script
+
+0.404 Thu Nov 14 10:25:20 CET 2007
   - Wrapper for easier running
 
 0.4  Wed Oct 24 06:52:11 CEST 2007
