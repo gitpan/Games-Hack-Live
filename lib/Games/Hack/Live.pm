@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # vim: set sw=2 expandtab : #
+# Master version is at https://developer.berlios.de/projects/games-hack/
 
 
 package Games::Hack::Live; 
@@ -12,7 +13,7 @@ require Exporter;
 @EXPORT = qw(Run);
 
 
-$VERSION=0.406;
+$VERSION=0.5;
 
 
 # Client program name
@@ -219,8 +220,8 @@ sub GDBStart
 
 
   GDBSync($gdb);
-  GDBSend("attach $prg_pid");
   GDBSend("set pagination off");
+  GDBSend("attach $prg_pid");
 
   CleanUp();
 
@@ -291,7 +292,6 @@ sub GDBPrompt
   $obj=ref($others[0]) eq "Expect" ? shift(@others) : $gdb;
   @others=GDBmatches(1) if !@others;
   if (!$obj->expect($TIMEOUT, @others))
-
   {
     $obj->print_log_file(">>> NO MATCH ... expected $gdb_prompt_delimiter, Continuing, or @others\n");
     $obj->print_log_file("got ", $obj->clear_accum());
@@ -715,7 +715,7 @@ sub KillWriteCallBack
 # When we get here, the program has already stopped.
   $is_running=0;
 
-  ($old) = $exp->before() =~ m#Old value = (\d+)#;
+  ($old) = $exp->after() =~ m#Old value = (\d+)#;
 
   $exp->clear_accum();
   $exp->print_log_file("### Got callback!\n");
@@ -728,6 +728,10 @@ sub KillWriteCallBack
     if ($old);
 
   GDBSend($exp, "info program", GDBmatches(0)); 
+  $quit=1,return 
+    if ($exp->before =~ 
+        m#program being debugged is not being run.#i);
+
   $exp->before =~ m#Program stopped at ((0x)?[0-9a-f]+)#i;
   $adr=oct($1);
   $exp->print_log_file("### Program at $adr!\n");
@@ -1405,14 +1409,11 @@ So this should maybe get bound to a MD5 of the binary or some such.
 
 =item Binary patching, program start
 
-Instead of simply outputting commands for C<gdb> to patch the program, the 
-binary itself could be patched (to a new name); then this binary could 
-simply be started instead of the other one. (Would avoid needing to check 
-the MD5 of the binary.)
-
-Or a shell script should be printed, that would take care of patching the 
-binary (via C<gdb>) itself - so only the shell script would 
-have to be started. (Could check for the MD5 of the executable, too!)
+Simply patching the program is already possibly; another way would be to
+print a shell script, that took care of patching the 
+binary (via C<gdb>) itself - so this script would 
+have to be started instead of the original executable.
+(Should check for the same executable - MD5/SHA-256 or whatever.)
 
 A further idea might be to export a shell script that uses 
 C<echo>/C<dd>/C<perl> or suchlike to patch the binary in the filesystem.

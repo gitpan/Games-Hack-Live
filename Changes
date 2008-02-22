@@ -1,5 +1,10 @@
 Revision history for Perl extension Games::Hack::Live.
 
+0.5
+	- small bugfix for applications with lots of libraries.
+	- Bugfix for killwrites - keep *address at old value.
+	- Stop script if debuggee exits
+
 0.406 Thu Nov 15 10:25:20 CET 2007
   - substitution for non-word characters in ::Patch names.
 
