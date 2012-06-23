@@ -13,7 +13,7 @@ require Exporter;
 @EXPORT = qw(Run);
 
 
-$VERSION=0.5;
+$VERSION=0.6;
 
 
 # Client program name
@@ -158,7 +158,7 @@ sub Inits
   getopts("p:h", \%cmd_opts);
 
 
-  $TIMEOUT=5; 
+  $TIMEOUT=15; 
   $should_be_running=0;
   $callbacks=();
   $dumppath="/tmp";
@@ -195,6 +195,14 @@ sub StartDebuggee
     {
       exec($prg);
       die "exec($prg): $!\n";
+    }
+
+    print "Started $prg as $prg_pid.\n";
+    # Wait for exec() to replace the binary.
+    for(0 .. 3) 
+    {
+      select(undef,undef,undef, 0.2);
+      last if readlink("/proc/$prg_pid/exe") ne readlink("/proc/$$/exe");
     }
   }
 
@@ -671,7 +679,8 @@ sub SaveMem
 {
   my($start, $end, $dir)=@_;
 
-  SaveMemtoFile($start, $end, "$dir/$start-$end");
+  SaveMemtoFile($start, $end, 
+      sprintf("%s/0x%8X-0x%8X", $dir, $start, $end));
 }
 
 
@@ -749,12 +758,20 @@ sub KillWriteCallBack
   {
 # We start with some offset before, to let the disassembler synchronize.
     $startadr=$adr-$aliasing-32;
-    GDBSend($exp, "disas $startadr " . ($adr+1), GDBmatches(0)); 
+    GDBSend($exp, "disassemble $startadr, " . ($adr+1), GDBmatches(0)); 
 
 # GDB prints the EIP without leading zeroes (info program), but the 
 # diassembly has it. Don't know now how it's printed on 64bit. 
 # We fetch an array, and the interesting parts should be the last two ...
     @found = ($exp->before =~ m/\n(0x\w+)\s+\<\S+\>:\s+(.*)/mg);
+    unless (@found) {
+      my $x = $exp->before;
+      $x =~ s/\n=> /\n   /;
+#   0x0000000000414b13:  sub    0x18(%rcx,%rdx,1),%eax
+      @found = ($x =~ m/\n\s*(0x\w+):\s+(\w.*)/mg);
+    }
+
+#    print "??? @found \n";
 
 # Look whether we had the correct address at the end (instruction aliasing 
 # might prevent this)
@@ -980,7 +997,7 @@ sub String2Bin
 
   return undef unless $stg1;
 
-  # integer type?
+  # Only a single value given?
   if (!$range)
   {
     return (
@@ -1013,7 +1030,7 @@ sub String2Bin
   $val1 += 0;
   $val2 += 0;
 
-  ($val1,$val2) = ($val2, $val1) if $val2 < $val1;
+  ($val1,$val2) = ($val2, $val1) if abs($val2) < abs($val1);
 
   my $stg1;
   # pack again, because the order could have changed.
@@ -1058,9 +1075,11 @@ sub String2Bin
     push @hex, map { sprintf("\\x%02X", $_); } @$chars;
   }
 
+# "." is not *any* character, sadly.
+# So we use "\C".
   return (
     length($stg1),
-    join("", "(?-xism:", ('.' x $to_chop), @hex, ")" ) 
+    join("", "(?-xism:", ("\\C" x $to_chop), @hex, ")" ) 
       );
 }
 
@@ -1303,7 +1322,7 @@ script takes momentarily control, deassembles a bit of the program, and
 patches the assembler code so that the modified value doesn't reach its 
 memory location.
 
-  keepvalueat 0xafad1208 "Money"
+  killwrites 0xafad1208 "Money"
 
 If you specify the optional flag C<ask>, you get asked for a description on 
 every such event; this is handy if you want to differentiate between 
@@ -1462,6 +1481,11 @@ Patches are welcome.
 =head1 AUTHOR
 
 Ph. Marek <pmarek@cpan.org>
+
+
+=head1 HOMEPAGE
+
+The homepage is at http://games-hack.berlios.de/.
 
 
 =head1 COPYRIGHT AND LICENSE

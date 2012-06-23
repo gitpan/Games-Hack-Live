@@ -1,5 +1,11 @@
 Revision history for Perl extension Games::Hack::Live.
 
+0.6
+  - Ability to work on multiple things in parallel,
+	  eg. money, lifes and strength.
+	- Bugfix - substituted "." by "\C" in regex.
+	- Memory dumps now named in hexadecimal.
+
 0.5
 	- small bugfix for applications with lots of libraries.
 	- Bugfix for killwrites - keep *address at old value.

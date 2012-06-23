@@ -1,11 +1,23 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Games-Hack-Live
-version:      0.5
-version_from: lib/Games/Hack/Live.pm
-installdirs:  site
+--- #YAML:1.0
+name:               Games-Hack-Live
+version:            0.6
+abstract:           Perl script to ease playing games
+author:
+    - Ph. Marek <pmarek@cpan.org>
+license:            unknown
+distribution_type:  module
+configure_requires:
+    ExtUtils::MakeMaker:  0
+build_requires:
+    ExtUtils::MakeMaker:  0
 requires:
-    Expect:                        1.21
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30_01
+    Expect:               1.21
+    Games::Hack::Patch::x86_64:  0
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.57_05
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4

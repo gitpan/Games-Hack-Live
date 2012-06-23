@@ -1,72 +1,141 @@
 #!/usr/bin/perl
 #########################
 
-use Test::More tests => 1;
+use Test::More;
 use Expect;
 
 #########################
+@patients=("double", "long", "int");
 
+# It seems that ok() cannot be used in a loop.
+# So I had to change the "ok" in the middle to "fail() if".
+plan "tests" => 1 + @patients*6;
 
-# The Games::Hack::Live script is used to examine *this* script;
-# it should be able to find a memory location, and change it.
+sub Diag {
+#diag(@_);
+} 
 
+$Expect::Log_Stdout=0;
+
+#########################
 ok(1, "start");
-exit;
 
-$client = new Expect;
+our $current_val;
 
-$client->raw_pty(1);
-$client->spawn("hack-live -p$$ 2>&1", ()) 
-or die "Cannot spawn Games::Hack::Live: $!\n";
+sub slave_getvalue
+{
+	my($slave)=@_;
 
+	$slave->print("\n");
+	$slave->expect(1, 
+			[ qr(^={5,} NEW VALUE: (\S+)), sub 
+				{ 
+					my($self)=@_;
+					# Allow the child to print an expression, so that the values to 
+					# be found isn't left on the stack (for printf() or similar).
+					$current_val=eval(($self->matchlist())[0]); 
+				} 
+			]
+		);
+
+	return $current_val;
+}
+
+
+
+for $patient (@patients)
+{
+	Diag("Going for $patient");
+
+	$slave=new Expect;
+	$slave->raw_pty(1);
+	$slave->spawn("sh -c t/test-$patient.*", ())
+		or die "Cannot spawn test-$patient.pl";
+
+	$client = new Expect;
+	$client->raw_pty(1);
+	$client->spawn("hack-live -p" . $slave->pid, ())
+		or die "Cannot spawn Games::Hack::Live: $!\n";
 
 # Testing here doesn't work. It seems that perl doesn't keep the scalar at 
-# the same memory location, but moves it around. Will have to be done via a 
-# C program. TODO
+# the same memory location, but moves it around. 
+# Strangely that works if the perl script is run separately - does the 
+# Test:: framework something like eval()?
 
-$var=2371.0;
-$ref=\$var;
-for $run (1 .. 10)
-{
-	$$ref += 113/$run;
-	$client->print("find " . ($var-1.0) . " " . ($var+1.0) . "\n");
-	$client->expect(1, [ qr(--->), sub { } ], );
-	$last=$client->before;
-	print STDERR "$var... $last\n";
-}
-diag("Loop finished");
-
-
-#$last=$client->before;
-print STDERR "$last\n";
-($adr, $count)=($last =~ /Most wanted:\s+(\w+)\((\d+)\)/);
-is($adr, "No matches found?");
-is($count < 7, "Not enough matches found?");
-like($last, qr/Most wanted:\s+(\w+)\((\d+)\)/, "No matches found?");
-is($2, $run, "Not everything matched?");
-
-diag("Address is $1");
+	$client->print("\n\n");
+	$client->expect(4, [ qr(^---), ] );
 
 
 
-{ 
-	use integer;
-	$var=71;
-	for $run (1 .. 10)
+	$loop_min=5;
+	$loop_max=17;
+# Take a few values, then try to inhibit changes.
+	for $loop (1 .. $loop_max)
 	{
-		$var += $run;
-		$client->print("find $var\n");
-		$client->expect(1, [ qr(--->), sub { } ], );
-$last=$client->before;
-#print STDERR "$last\n";
+		slave_getvalue($slave);
+		last unless $current_val;
+
+		Diag("got current value as $current_val\n");
+		$client->print(
+				$current_val =~ m#\.# ?
+				"find ($patient) ". ($current_val-1) ." ". ($current_val+1) ."\n" :
+				"find ($patient) $current_val\n");
+		$client->expect(4, [ qr(--->), sub { } ], );
+
+		$last=$client->before;
+		($wanted)=($last =~ /Most wanted:\s+(\w.*)/);
+		last unless $wanted;
+
+		%matches=@matches=grep($_ !~ /^(0x0+)?0$/,$wanted =~ /(\w+)\((\d+)\)/g);
+#		print STDERR "$loop: $wanted\n==== has $current_val: ", 
+#		join(" ", @matches),"\n", 0+@matches, $matches[1] > $matches[3],"\n";
+
+# Stop testing if there's only a single match, or a single best match.
+		last if ($loop > $loop_min) && 
+			@matches &&
+			(@matches == 2 ||
+			 $matches[1] > $matches[3]);
 	}
-	diag("Loop finished");
+
+	ok($current_val>0, "Identifiable output");
+	ok($wanted, "Got list of addresses");
+
+
+	ok(@matches==2, 
+			"matching addresses: 1 wanted; got " . 
+			join(" ", sort keys %matches));
+
+	($adr, $count)=each %matches;
+	$last=$client->before;
+	Diag("got address $adr, with $count matches.");
+	ok($adr, "address found");
+# we allow a single bad value.
+	ok($count >= $loop_min, "Not enough matches found?");
+
+
+	Diag("Trying to kill writes.\n");
+
+	$client->print("killwrites $adr\n");
+	$client->clear_accum;
+	$client->expect(1, [ qr(--->), sub { } ], );
+
+	slave_getvalue($slave);
+	slave_getvalue($slave);
+	$slave->clear_accum;
+
+	$old=slave_getvalue($slave);
+	$new=slave_getvalue($slave);
+
+	Diag("old was $old, new is $new");
+	ok($old == $new ,"changed value ($old == $new)?");
+
+	$slave->print("quit\n");
+	$client->print("kill\n\n");
+	$client->hard_close;
+	$slave->hard_close;
+
+	Diag("$patient done\n");
 }
-
-
-#ok(1, "aga");
-#pass("aa");
-#fail("aa");
 
 exit;
 
