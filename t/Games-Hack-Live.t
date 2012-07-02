@@ -5,17 +5,20 @@ use Test::More;
 use Expect;
 
 #########################
-@patients=("double", "long", "int");
+my @patients=("double", "long");
 
 # It seems that ok() cannot be used in a loop.
 # So I had to change the "ok" in the middle to "fail() if".
 plan "tests" => 1 + @patients*6;
 
 sub Diag {
-#diag(@_);
+diag(@_);
 } 
 
 $Expect::Log_Stdout=0;
+#         $Expect::Exp_Internal = 1;
+# $Expect::Debug = 1;
+
 
 #########################
 ok(1, "start");
@@ -28,33 +31,37 @@ sub slave_getvalue
 
 	$slave->print("\n");
 	$slave->expect(1, 
-			[ qr(^={5,} NEW VALUE: (\S+)), sub 
+			[ qr(^={5,} NEW VALUE: (\S+))m, sub 
 				{ 
 					my($self)=@_;
 					# Allow the child to print an expression, so that the values to 
 					# be found isn't left on the stack (for printf() or similar).
+					#Diag("eval of ", (($self->matchlist())[0]));
 					$current_val=eval(($self->matchlist())[0]); 
 				} 
 			]
 		);
+		#Diag("slave has ", $slave->before());
+	$slave->clear_accum;
 
 	return $current_val;
 }
 
 
 
-for $patient (@patients)
+for my $patient (@patients)
 {
 	Diag("Going for $patient");
 
-	$slave=new Expect;
+	my $slave=new Expect;
 	$slave->raw_pty(1);
-	$slave->spawn("sh -c t/test-$patient.*", ())
-		or die "Cannot spawn test-$patient.pl";
+#	$slave->spawn("perl t/test-$patient.pl", ())
+	$slave->spawn("t/test-$patient", ())
+		or die "Cannot spawn test-$patient";
 
 	$client = new Expect;
 	$client->raw_pty(1);
-	$client->spawn("hack-live -p" . $slave->pid, ())
+	$client->spawn("PERLLIB=/home/marek/mine/perl/CPAN/Hack-Live-1/lib/ strace -tt -o /tmp/adsfga -s 200000 hack-live -p" . $slave->pid, ())
 		or die "Cannot spawn Games::Hack::Live: $!\n";
 
 # Testing here doesn't work. It seems that perl doesn't keep the scalar at 
@@ -64,37 +71,52 @@ for $patient (@patients)
 
 	$client->print("\n\n");
 	$client->expect(4, [ qr(^---), ] );
+	#Diag("prequel: got \n", $client->before, "\n------------END OF PREQUEL");
+	$client->clear_accum;
 
 
 
-	$loop_min=5;
-	$loop_max=17;
+	my $loop_min=5;
+	my $loop_max=17;
+	my $wanted;
+	my $adr;
+	my $count;
+	my @matches;
 # Take a few values, then try to inhibit changes.
-	for $loop (1 .. $loop_max)
+	for my $loop (1 .. $loop_max)
 	{
+		#Diag("loop $loop");
 		slave_getvalue($slave);
+		#Diag("c-v $current_val");
 		last unless $current_val;
 
-		Diag("got current value as $current_val\n");
+		# change last digit
+		my $one_less = $current_val;
+		$one_less =~ s/([1-9]0*)$/$1 - 1/e;
+		my $one_more = $current_val;
+		$one_more =~ s/([0-8]9*)$/$1 + 1/e;
+		#Diag("got current value as $current_val -- $one_less $one_more\n");
+
 		$client->print(
 				$current_val =~ m#\.# ?
-				"find ($patient) ". ($current_val-1) ." ". ($current_val+1) ."\n" :
+				"find ($patient) $one_less - $one_more\n" :
 				"find ($patient) $current_val\n");
-		$client->expect(4, [ qr(--->), sub { } ], );
+		$client->expect(4, [ qr(^--->) ], );
 
-		$last=$client->before;
+		my $last=$client->before;
+		$client->clear_accum;
+		#Diag("h-l said $last");
 		($wanted)=($last =~ /Most wanted:\s+(\w.*)/);
 		last unless $wanted;
 
-		%matches=@matches=grep($_ !~ /^(0x0+)?0$/,$wanted =~ /(\w+)\((\d+)\)/g);
+		# we know that the address must be on a page boundary - so we can eliminate a few false positives.
+		($adr, $count)=@matches=grep($_ !~ /^(0x0+)?0$/,$wanted =~ /(\w+000)\((\d+)\)/g);
 #		print STDERR "$loop: $wanted\n==== has $current_val: ", 
 #		join(" ", @matches),"\n", 0+@matches, $matches[1] > $matches[3],"\n";
 
 # Stop testing if there's only a single match, or a single best match.
-		last if ($loop > $loop_min) && 
-			@matches &&
-			(@matches == 2 ||
-			 $matches[1] > $matches[3]);
+		$count //= 0;
+		last if $adr && $count >= $loop_min;
 	}
 
 	ok($current_val>0, "Identifiable output");
@@ -102,11 +124,11 @@ for $patient (@patients)
 
 
 	ok(@matches==2, 
-			"matching addresses: 1 wanted; got " . 
-			join(" ", sort keys %matches));
+			"matching addresses: 1 wanted; got " . scalar(@matches)/2);
 
-	($adr, $count)=each %matches;
-	$last=$client->before;
+	my $last=$client->before;
+	$client->clear_accum;
+	$adr //= 0;
 	Diag("got address $adr, with $count matches.");
 	ok($adr, "address found");
 # we allow a single bad value.
@@ -126,7 +148,7 @@ for $patient (@patients)
 	$old=slave_getvalue($slave);
 	$new=slave_getvalue($slave);
 
-	Diag("old was $old, new is $new");
+	#Diag("old was $old, new is $new");
 	ok($old == $new ,"changed value ($old == $new)?");
 
 	$slave->print("quit\n");
@@ -134,7 +156,7 @@ for $patient (@patients)
 	$client->hard_close;
 	$slave->hard_close;
 
-	Diag("$patient done\n");
+	# Diag("$patient done\n");
 }
 
 exit;

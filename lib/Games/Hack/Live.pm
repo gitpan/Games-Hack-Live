@@ -13,7 +13,7 @@ require Exporter;
 @EXPORT = qw(Run);
 
 
-$VERSION=0.6;
+$VERSION=0.61;
 
 
 # Client program name
@@ -210,7 +210,7 @@ sub StartDebuggee
 # For some things (like patching) we need the full path.
 # TODO: works only on linux.
   $prg=readlink("/proc/$prg_pid/exe") || 
-	  die "Executable of pid $prg_pid not determined: $!\n";
+	  die "Executable of pid $prg_pid not determined: $!\n" . `ls -la "/proc/$prg_pid" ; ps fax`;
 
   print "Using $prg with pid $prg_pid\n";
 }
@@ -475,7 +475,7 @@ sub ShowMatches
   @most=sort { $find_adr{$b} <=> $find_adr{$a}; } keys %find_adr;
 
   print "\nMost wanted:\n  ";
-  map { printf "0x%08X(%d)  ", $_,$find_adr{$_}; } @most[0 .. 5];
+  map { printf "0x%08X(%d)  ", $_,$find_adr{$_}; } splice(@most, 0, 5);
   print "\n";
 }
 
@@ -760,13 +760,16 @@ sub KillWriteCallBack
     $startadr=$adr-$aliasing-32;
     GDBSend($exp, "disassemble $startadr, " . ($adr+1), GDBmatches(0)); 
 
+    my $x = $exp->before;
+    $x =~ s/\n=> /\n   /;
+
 # GDB prints the EIP without leading zeroes (info program), but the 
 # diassembly has it. Don't know now how it's printed on 64bit. 
 # We fetch an array, and the interesting parts should be the last two ...
-    @found = ($exp->before =~ m/\n(0x\w+)\s+\<\S+\>:\s+(.*)/mg);
+#  0x00007fe627b742f3 <__mpn_submul_1+227>:     mov    %ebx,%eax
+    @found = ($x =~ m/\n\s*(0x\w+)\s+\<\S+\>:\s+(.*)/mg);
+
     unless (@found) {
-      my $x = $exp->before;
-      $x =~ s/\n=> /\n   /;
 #   0x0000000000414b13:  sub    0x18(%rcx,%rdx,1),%eax
       @found = ($x =~ m/\n\s*(0x\w+):\s+(\w.*)/mg);
     }

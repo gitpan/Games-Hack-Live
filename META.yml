@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Games-Hack-Live
-version:            0.6
+version:            0.61
 abstract:           Perl script to ease playing games
 author:
     - Ph. Marek <pmarek@cpan.org>
@@ -13,6 +13,7 @@ build_requires:
 requires:
     Expect:               1.21
     Games::Hack::Patch::x86_64:  0
+    IPC::Mmap:            0.21
 no_index:
     directory:
         - t
