@@ -5,6 +5,11 @@ use Test::More;
 use Expect;
 
 #########################
+if (system("which gdb")) {
+	plan skip_all => "no GDB found.";
+	exit 0;
+}
+
 my @patients=("double", "long");
 
 # It seems that ok() cannot be used in a loop.
@@ -12,7 +17,7 @@ my @patients=("double", "long");
 plan "tests" => 1 + @patients*6;
 
 sub Diag {
-diag(@_);
+	diag(@_);
 } 
 
 $Expect::Log_Stdout=0;

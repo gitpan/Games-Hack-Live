@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Games-Hack-Live
-version:            0.61
+version:            0.62
 abstract:           Perl script to ease playing games
 author:
     - Ph. Marek <pmarek@cpan.org>

@@ -12,10 +12,9 @@ WriteMakefile(
 			IPC::Mmap => 0.21, # for testing only
 			"Games::Hack::Patch::$machine" => 0 },
 	depend => { 
-		'hack-live'			=> "t/test-double",
-		'hack-live'			=> "t/test-long",
-		"t/test-double" => "t/test-double.c", 
-		"t/test-long" => "t/test-long.c", 
+		'hack-live'			=> "t/test-double t/test-long",
+		"t/test-double" 	=> "t/test-double.c", 
+		"t/test-long" 		=> "t/test-long.c", 
 	},
     EXE_FILES         => [ "hack-live" ],
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
